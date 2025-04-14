@@ -123,7 +123,7 @@ namespace Mail.Service
                 <p>Clique no link abaixo para redefinir sua senha:</p>
                 <div style=""font-size: 24px; font-weight: bold; letter-spacing: 4px; background-color: #27ae60; padding: 15px; width: fit-content; border-radius: 8px; margin: 20px auto; text-align: center; color: white;"">
                     <a href=""{_resetPasswordUrl}{content.Token}"" style=""background-color: #27ae60; padding: 10px 20px; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;"">
-                        Redefinir Senha
+                        Redefinir
                     </a>
                 </div>
                 <p>Se você não fez essa solicitação, ignore este e-mail.</p>";
