@@ -1,0 +1,11 @@
+bin/
+obj/
+.vs/
+*.user
+*.suo
+*.sln.ide
+*.log
+*.tmp
+*.nupkg
+*.snupkg
+**/packages/*

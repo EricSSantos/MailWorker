@@ -1,0 +1,48 @@
+services:
+  rabbitmq:
+    image: rabbitmq:management
+    container_name: rabbitmq
+    ports:
+      - 5672:5672
+      - 15672:15672
+    environment:
+      RABBITMQ_DEFAULT_USER: guest
+      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_VHOST: /
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+      - rabbitmq_logs:/var/log/rabbitmq
+      - ./rabbitmq/rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf
+      - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
+    networks:
+      - private_network
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+  mail.worker:
+    container_name: mailworker
+    build:
+      context: ..
+      dockerfile: MailWorker/Mail.Worker/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+    networks:
+      - public_network
+      - private_network
+
+volumes:
+  rabbitmq_data:
+  rabbitmq_logs:
+
+networks:
+  public_network:
+    driver: bridge
+  private_network:
+    driver: bridge
