@@ -3,6 +3,7 @@ using Mail.Domain.Enums;
 using Mail.Service.Interface;
 using Mail.Service.Utils;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using SendGrid;
 using SendGrid.Helpers.Mail;
 using System.Text.Json;
@@ -12,21 +13,13 @@ namespace Mail.Service
     public class MailService : IMailService
     {
         #region Dependencies
-        private readonly string _key;
-        private readonly string _fromEmail;
-        private readonly string _fromName;
-        private readonly string _resetPasswordUrl;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<MailService> _logger;
 
-        public MailService(IConfiguration configuration)
+        public MailService(IConfiguration configuration, ILogger<MailService> logger)
         {
-            var sendGridSection = configuration.GetSection("SendGrid");
-            var applicationSection = configuration.GetSection("Application");
-
-            _key = sendGridSection["Key"]!;
-            _fromEmail = sendGridSection["FromEmail"]!;
-            _fromName = sendGridSection["FromName"]!;
-
-            _resetPasswordUrl = applicationSection["ResetPasswordUrl"]!;
+            _configuration = configuration;
+            _logger = logger;
         }
         #endregion
 
@@ -41,8 +34,9 @@ namespace Mail.Service
         {
             try
             {
-                var client = new SendGridClient(_key);
-                var from = new EmailAddress(_fromEmail, _fromName);
+                var sendGridSection = _configuration.GetSection("SendGrid");
+                var client = new SendGridClient(sendGridSection["Key"]);
+                var from = new EmailAddress(sendGridSection["FromEmail"], sendGridSection["FromName"]);
                 var recipientEmail = new EmailAddress(emailMessage.To);
 
                 var (subject, htmlContent) = Generate(emailMessage.Type, emailMessage.Content, emailMessage.FullName);
@@ -53,6 +47,7 @@ namespace Mail.Service
                 if (!response.IsSuccessStatusCode)
                 {
                     var body = await response.Body.ReadAsStringAsync();
+                    _logger.LogError($"Falha ao enviar e-mail: {response.StatusCode} - {body}");
                     throw new InvalidOperationException($"Falha ao enviar e-mail: {response.StatusCode} - {body}");
                 }
             }
@@ -74,14 +69,17 @@ namespace Mail.Service
             switch (type)
             {
                 case EmailType.AccountConfirmation:
-                    return AccountConfirmationEmail(ContentHelper.DeserializeContent<AccountConfirmation>(content), fullName);
+                    if (ContentHelper.TryDeserializeContent<AccountConfirmation>(content, out var accountContent))
+                        return AccountConfirmationEmail(accountContent!, fullName);
+                    break;
 
                 case EmailType.PasswordReset:
-                    return PasswordResetEmail(ContentHelper.DeserializeContent<PasswordReset>(content), fullName);
-
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(type), $"Tipo de e-mail não suportado ou conteúdo inválido: {type}");
+                    if (ContentHelper.TryDeserializeContent<PasswordReset>(content, out var resetContent))
+                        return PasswordResetEmail(resetContent!, fullName);
+                    break;
             }
+
+            throw new ArgumentException($"Tipo de e-mail não suportado ou conteúdo inválido: {type}");
         }
 
         /// <summary>
@@ -115,6 +113,8 @@ namespace Mail.Service
         {
             const string SUBJECT = "Redefinição de Senha";
 
+            var resetUrl = _configuration["Application:ResetPasswordUrl"];
+
             var htmlContent = $@"
                 <h2 style=""margin: 0; color: #333333; font-size: 22px;"">
                     Olá, <span style=""color: #27ae60;"">{fullName}</span>
@@ -122,12 +122,11 @@ namespace Mail.Service
                 <p>Recebemos uma solicitação para redefinir a senha da sua conta.</p>
                 <p>Clique no link abaixo para redefinir sua senha:</p>
                 <div style=""font-size: 24px; font-weight: bold; letter-spacing: 4px; background-color: #27ae60; padding: 15px; width: fit-content; border-radius: 8px; margin: 20px auto; text-align: center; color: white;"">
-                    <a href=""{_resetPasswordUrl}{content.Token}"" style=""background-color: #27ae60; padding: 10px 20px; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;"">
+                    <a href=""{resetUrl}{content.Token}"" style=""background-color: #27ae60; padding: 10px 20px; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;"">
                         Redefinir
                     </a>
                 </div>
                 <p>Se você não fez essa solicitação, ignore este e-mail.</p>";
-
 
             return (SUBJECT, Wrap(htmlContent));
         }

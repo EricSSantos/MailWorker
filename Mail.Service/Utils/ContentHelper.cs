@@ -10,12 +10,20 @@ namespace Mail.Service.Utils
         /// </summary>
         /// <typeparam name="T">Tipo de destino para a desserialização.</typeparam>
         /// <param name="content">Conteúdo JSON a ser desserializado.</param>
-        /// <returns>Objeto desserializado do tipo <typeparamref name="T"/>.</returns>
-        /// <exception cref="ArgumentException">Lançado se a desserialização falhar.</exception>
-        public static T DeserializeContent<T>(JsonElement content)
+        /// <param name="result">Objeto desserializado.</param>
+        /// <returns>True se a desserialização foi bem-sucedida, caso contrário false.</returns>
+        public static bool TryDeserializeContent<T>(JsonElement content, out T? result)
         {
-            return content.Deserialize<T>(ContentOptions)
-                   ?? throw new ArgumentException($"Falha ao desserializar conteúdo para {typeof(T).Name}");
+            try
+            {
+                result = content.Deserialize<T>(ContentOptions);
+                return result != null;
+            }
+            catch
+            {
+                result = default;
+                return false;
+            }
         }
 
         /// <summary>
@@ -23,12 +31,20 @@ namespace Mail.Service.Utils
         /// </summary>
         /// <typeparam name="T">Tipo de destino para a desserialização.</typeparam>
         /// <param name="json">Mensagem JSON a ser desserializada.</param>
-        /// <returns>Objeto desserializado do tipo <typeparamref name="T"/>.</returns>
-        /// <exception cref="ArgumentException">Lançado se a desserialização falhar.</exception>
-        public static T DeserializeMessage<T>(string json)
+        /// <param name="result">Objeto desserializado.</param>
+        /// <returns>True se a desserialização foi bem-sucedida, caso contrário false.</returns>
+        public static bool TryDeserializeMessage<T>(string json, out T? result)
         {
-            return JsonSerializer.Deserialize<T>(json, MessageOptions)
-                   ?? throw new ArgumentException($"Falha ao desserializar mensagem para {typeof(T).Name}");
+            try
+            {
+                result = JsonSerializer.Deserialize<T>(json, MessageOptions);
+                return result != null;
+            }
+            catch
+            {
+                result = default;
+                return false;
+            }
         }
 
         #region Private Methods

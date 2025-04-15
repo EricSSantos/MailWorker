@@ -23,18 +23,20 @@ namespace Mail.Worker.Services
         /// </summary>
         public async Task ProcessMessage(string emailMessageJson)
         {
-            var emailMessage = ContentHelper.DeserializeMessage<EmailMessage>(emailMessageJson);
+            if (!ContentHelper.TryDeserializeMessage<EmailMessage>(emailMessageJson, out var emailMessage))
+            {
+                _logger.LogWarning("Mensagem inválida. Falha ao desserializar JSON para EmailMessage.");
+                return;
+            }
 
             try
             {
                 await _mailService.SendEmail(emailMessage);
-
-                _logger.LogInformation($"E-mail: {emailMessage.Id} enviado com sucesso.");
+                _logger.LogInformation($"E-mail enviado com sucesso: {emailMessage.Id}");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, $"Falha ao processar o e-mail: {emailMessage.Id}");
-                throw;
             }
         }
     }

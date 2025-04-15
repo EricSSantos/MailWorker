@@ -32,5 +32,10 @@ namespace Mail.Domain.Entities
         /// Conteúdo da mensagem de e-mail em formato JSON.
         /// </summary>
         public JsonElement Content { get; set; }
+
+        /// <summary>
+        /// Data e hora em que a mensagem de e-mail foi criada.
+        /// </summary>
+        public DateTime CreatedAt { get; set; }
     }
 }
