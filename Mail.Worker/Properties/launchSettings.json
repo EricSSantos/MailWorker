@@ -1,14 +1,14 @@
 {
   "$schema": "https://json.schemastore.org/launchsettings.json",
   "profiles": {
-    "Mail.Worker": {
+    "LOCAL": {
       "commandName": "Project",
       "dotnetRunMessages": true,
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Development"
       }
     },
-    "Container (Docker)": {
+    "DOCKERFILE": {
       "commandName": "Docker",
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Production"

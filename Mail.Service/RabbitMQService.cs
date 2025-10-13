@@ -1,19 +1,19 @@
 ﻿using Mail.Domain.Entities;
+using Mail.Service.Helpers;
+using Mail.Service.Helpers.Settings;
 using Mail.Service.Interface;
-using Mail.Service.Utils;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
 
-namespace Mail.Worker.Services
+namespace Mail.Service
 {
-    public class RabbitMQService : IRabbitMQService, IDisposable
+    public sealed class RabbitMQService : IRabbitMQService, IDisposable
     {
-        #region Dependencies
-        private readonly IConfiguration _configuration;
-        private readonly IMessageService _messageService;
+        private readonly RabbitMqSettings _settings;
+        private readonly IMailService _mailService;
         private readonly ILogger<RabbitMQService> _logger;
 
         private readonly IConnection _connection;
@@ -23,34 +23,42 @@ namespace Mail.Worker.Services
         private const string RETRY_HEADER = "x-retry-count";
         private const string ERROR_HEADER = "x-error";
 
-        public RabbitMQService(IConfiguration config, IMessageService messageService, ILogger<RabbitMQService> logger)
+        public RabbitMQService(
+            IOptions<RabbitMqSettings> options,
+            IMailService mailService,
+            ILogger<RabbitMQService> logger)
         {
-            _configuration = config;
-            _messageService = messageService;
+            _settings = options.Value;
+            _mailService = mailService;
             _logger = logger;
-
-            var rabbit = _configuration.GetSection("RabbitMQ");
 
             var factory = new ConnectionFactory
             {
-                HostName = rabbit["Host"],
-                Port = int.Parse(rabbit["Port"]!),
-                UserName = rabbit["User"],
-                Password = rabbit["Password"],
+                HostName = _settings.Host,
+                Port = _settings.Port,
+                UserName = _settings.User,
+                Password = _settings.Password,
                 DispatchConsumersAsync = true
             };
 
             _connection = factory.CreateConnection();
             _channel = _connection.CreateModel();
 
-            _channel.QueueDeclare(queue: rabbit["MailQueue"], durable: true, exclusive: false, autoDelete: false, arguments: null);
-            _channel.QueueDeclare(queue: rabbit["DeadLetterQueue"], durable: true, exclusive: false, autoDelete: false, arguments: null);
-        }
-        #endregion
+            _channel.QueueDeclare(
+                queue: _settings.EmailQueue,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null);
 
-        /// <summary>
-        /// Inicia o consumo de mensagens da fila.
-        /// </summary>
+            _channel.QueueDeclare(
+                queue: _settings.DeadLetterQueue,
+                durable: true,
+                exclusive: false,
+                autoDelete: false,
+                arguments: null);
+        }
+
         public void Start(CancellationToken cancellationToken)
         {
             var consumer = new AsyncEventingBasicConsumer(_channel);
@@ -58,39 +66,37 @@ namespace Mail.Worker.Services
             consumer.Received += async (_, ea) =>
             {
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
-                var retryCount = RetryCount(ea);
+                var retryCount = GetRetryCount(ea);
 
-                if (!ContentHelper.TryDeserializeMessage<EmailMessage>(json, out var emailMessage))
+                if (!Serializer.TryDeserializeMessage<Message>(json, out var emailMessage))
                 {
-                    _logger.LogWarning($"Mensagem inválida. Falha ao desserializar JSON para EmailMessage.");
-                    SendToDeadLetter(json, "Falha ao desserializar JSON para EmailMessage.");
+                    _logger.LogWarning("Mensagem inválida. Falha ao desserializar JSON para EmailMessage.");
+                    SendToDeadLetter(json, "Falha ao desserializar JSON.");
                     _channel.BasicAck(ea.DeliveryTag, false);
                     return;
                 }
 
                 try
                 {
-                    _logger.LogInformation($"Processando mensagem: {emailMessage.Id}");
+                    _logger.LogInformation("Processando e-mail {EmailId} para {To}", emailMessage.Id, emailMessage.To);
 
-                    await _messageService.ProcessMessage(json);
+                    await _mailService.SendEmail(emailMessage);
 
                     _channel.BasicAck(ea.DeliveryTag, false);
-                    _logger.LogInformation($"Mensagem processada com sucesso: {emailMessage.Id}");
+                    _logger.LogInformation("E-mail enviado com sucesso: {EmailId}", emailMessage.Id);
                 }
                 catch (Exception ex)
                 {
                     retryCount++;
 
-                    var id = emailMessage?.Id.ToString();
-
                     if (retryCount >= MAX_RETRY)
                     {
-                        _logger.LogError(ex, $"Falha após {retryCount} tentativas. Enviando para dead-letter: {id}");
+                        _logger.LogError(ex, "Falha após {RetryCount} tentativas. Enviando para dead-letter: {EmailId}", retryCount, emailMessage.Id);
                         SendToDeadLetter(json, $"Falha após {MAX_RETRY} tentativas: {ex.Message}");
                     }
                     else
                     {
-                        _logger.LogWarning($"Falha ao processar mensagem {id}. Reenviando. Tentativa: {retryCount}");
+                        _logger.LogWarning("Falha ao processar mensagem {EmailId}. Reenviando (tentativa {RetryCount})", emailMessage.Id, retryCount);
                         RetryMessage(json, retryCount);
                     }
 
@@ -98,12 +104,12 @@ namespace Mail.Worker.Services
                 }
             };
 
-            _channel.BasicConsume(queue: _configuration["RabbitMQ:MailQueue"]!, autoAck: false, consumer: consumer);
+            _channel.BasicConsume(
+                queue: _settings.EmailQueue,
+                autoAck: false,
+                consumer: consumer);
         }
 
-        /// <summary>
-        /// Fecha conexões e canais do RabbitMQ.
-        /// </summary>
         public void Dispose()
         {
             _channel?.Close();
@@ -113,10 +119,8 @@ namespace Mail.Worker.Services
         }
 
         #region Private Methods
-        /// <summary>
-        /// Obtém o número de tentativas de reenvio de uma mensagem a partir de seus headers.
-        /// </summary>
-        private int RetryCount(BasicDeliverEventArgs ea)
+
+        private int GetRetryCount(BasicDeliverEventArgs ea)
         {
             if (ea.BasicProperties.Headers != null &&
                 ea.BasicProperties.Headers.TryGetValue(RETRY_HEADER, out var retryHeader) &&
@@ -129,9 +133,6 @@ namespace Mail.Worker.Services
             return 0;
         }
 
-        /// <summary>
-        /// Reenvia a mensagem para a fila de origem, incrementando o contador de tentativas.
-        /// </summary>
         private void RetryMessage(string json, int retryCount)
         {
             var props = _channel.CreateBasicProperties();
@@ -143,15 +144,11 @@ namespace Mail.Worker.Services
 
             _channel.BasicPublish(
                 exchange: "",
-                routingKey: _configuration["RabbitMQ:MailQueue"],
+                routingKey: _settings.EmailQueue,
                 basicProperties: props,
-                body: Encoding.UTF8.GetBytes(json)
-            );
+                body: Encoding.UTF8.GetBytes(json));
         }
 
-        /// <summary>
-        /// Envia a mensagem para a fila de dead letter quando o número máximo de tentativas é atingido.
-        /// </summary>
         private void SendToDeadLetter(string json, string errorMessage)
         {
             var props = _channel.CreateBasicProperties();
@@ -163,11 +160,11 @@ namespace Mail.Worker.Services
 
             _channel.BasicPublish(
                 exchange: "",
-                routingKey: _configuration["RabbitMQ:DeadLetterQueue"],
+                routingKey: _settings.DeadLetterQueue,
                 basicProperties: props,
-                body: Encoding.UTF8.GetBytes(json)
-            );
+                body: Encoding.UTF8.GetBytes(json));
         }
+
         #endregion
     }
 }

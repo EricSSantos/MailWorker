@@ -1,187 +1,62 @@
 ﻿using Mail.Domain.Entities;
-using Mail.Domain.Enums;
+using Mail.Service.Helpers.Settings;
 using Mail.Service.Interface;
-using Mail.Service.Utils;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using SendGrid;
-using SendGrid.Helpers.Mail;
-using System.Text.Json;
+using Microsoft.Extensions.Options;
+using System.Net;
+using System.Net.Mail;
 
 namespace Mail.Service
 {
-    public class MailService : IMailService
+    public sealed class MailService : IMailService
     {
-        #region Dependencies
-        private readonly IConfiguration _configuration;
+        private readonly SmtpSettings _smtp;
         private readonly ILogger<MailService> _logger;
+        private readonly IEnumerable<IEmailStrategy> _strategies;
 
-        public MailService(IConfiguration configuration, ILogger<MailService> logger)
+        public MailService(
+            IOptions<SmtpSettings> smtp,
+            ILogger<MailService> logger,
+            IEnumerable<IEmailStrategy> strategies)
         {
-            _configuration = configuration;
+            _smtp = smtp.Value;
             _logger = logger;
+            _strategies = strategies;
         }
-        #endregion
 
-        /// <summary>
-        /// Envia um e-mail para o destinatário, com base no tipo de e-mail e conteúdo fornecido.
-        /// Realiza a geração do conteúdo e o envio usando o SendGrid.
-        /// </summary>
-        /// <param name="type">Tipo do e-mail a ser enviado.</param>
-        /// <param name="to">Endereço de e-mail do destinatário.</param>
-        /// <param name="content">Conteúdo do e-mail em formato Json.</param>
-        public async Task SendEmail(EmailMessage emailMessage)
+        public async Task SendEmail(Message emailMessage)
         {
             try
             {
-                var sendGridSection = _configuration.GetSection("SendGrid");
-                var client = new SendGridClient(sendGridSection["Key"]);
-                var from = new EmailAddress(sendGridSection["FromEmail"], sendGridSection["FromName"]);
-                var recipientEmail = new EmailAddress(emailMessage.To);
+                var strategy = _strategies.FirstOrDefault(s => s.Type == emailMessage.Type)
+                    ?? throw new ArgumentException($"Nenhuma estratégia configurada para o tipo {emailMessage.Type}");
 
-                var (subject, htmlContent) = Generate(emailMessage.Type, emailMessage.Content, emailMessage.FullName);
-                var message = MailHelper.CreateSingleEmail(from, recipientEmail, subject, plainTextContent: null, htmlContent);
+                var (subject, htmlContent) = strategy.Build(emailMessage);
 
-                var response = await client.SendEmailAsync(message);
-
-                if (!response.IsSuccessStatusCode)
+                using var smtpClient = new SmtpClient(_smtp.Host)
                 {
-                    var body = await response.Body.ReadAsStringAsync();
-                    _logger.LogError($"Falha ao enviar e-mail: {response.StatusCode} - {body}");
-                    throw new InvalidOperationException($"Falha ao enviar e-mail: {response.StatusCode} - {body}");
-                }
+                    Port = _smtp.Port,
+                    Credentials = new NetworkCredential(_smtp.User, _smtp.Password),
+                    EnableSsl = _smtp.EnableSsl
+                };
+
+                using var message = new MailMessage(
+                    new MailAddress(_smtp.FromEmail, _smtp.FromName),
+                    new MailAddress(emailMessage.To))
+                {
+                    Subject = subject,
+                    Body = htmlContent,
+                    IsBodyHtml = true
+                };
+
+                await smtpClient.SendMailAsync(message);
+                _logger.LogInformation("E-mail enviado com sucesso para {Email}", emailMessage.To);
             }
             catch (Exception ex)
             {
-                throw new InvalidOperationException("Falha ao enviar e-mail", ex);
+                _logger.LogError(ex, "Erro ao enviar e-mail para {Email}", emailMessage.To);
+                throw;
             }
         }
-
-        #region Private Methods
-        /// <summary>
-        /// Gera o assunto e conteúdo HTML do e-mail com base no tipo e no conteúdo fornecido.
-        /// </summary>
-        /// <param name="type">Tipo do e-mail a ser gerado.</param>
-        /// <param name="content">Conteúdo do e-mail em formato Json.</param>
-        /// <returns>Retorna o assunto e o conteúdo HTML do e-mail.</returns>
-        private (string Subject, string HtmlContent) Generate(EmailType type, JsonElement content, string fullName)
-        {
-            switch (type)
-            {
-                case EmailType.AccountConfirmation:
-                    if (ContentHelper.TryDeserializeContent<AccountConfirmation>(content, out var accountContent))
-                        return AccountConfirmationEmail(accountContent!, fullName);
-                    break;
-
-                case EmailType.PasswordReset:
-                    if (ContentHelper.TryDeserializeContent<PasswordReset>(content, out var resetContent))
-                        return PasswordResetEmail(resetContent!, fullName);
-                    break;
-            }
-
-            throw new ArgumentException($"Tipo de e-mail não suportado ou conteúdo inválido: {type}");
-        }
-
-        /// <summary>
-        /// Gera o conteúdo de um e-mail de confirmação de conta, incluindo o nome do usuário e o código de confirmação.
-        /// </summary>
-        /// <param name="content">Dados de confirmação de conta (nome do usuário e código).</param>
-        /// <returns>Retorna o assunto e o conteúdo HTML do e-mail de confirmação de conta.</returns>
-        private (string Subject, string HtmlContent) AccountConfirmationEmail(AccountConfirmation content, string fullName)
-        {
-            const string SUBJECT = "Confirmação de Cadastro";
-
-            var htmlContent = $@"
-                <h2 style=""margin: 0; color: #333333; font-size: 22px;"">
-                    Seja bem-vindo, <span style=""color: #27ae60;"">{fullName}</span>
-                </h2>
-                <p>Seu cadastro foi realizado com sucesso.</p>
-                <p>Para concluir seu cadastro, utilize o código de confirmação abaixo:</p>
-                <div style='font-size: 24px; font-weight: bold; letter-spacing: 4px; background-color: #27ae60; padding: 15px; width: fit-content; border-radius: 8px; margin: 20px auto; text-align: center; color: white;'>
-                    {content.Code}
-                </div>";
-
-            return (SUBJECT, Wrap(htmlContent));
-        }
-
-        /// <summary>
-        /// Gera o conteúdo de um e-mail de reset de senha, incluindo o token e a URL para o novo login.
-        /// </summary>
-        /// <param name="content">Objeto de EmailMessage que contém o nome completo e dados de reset de senha.</param>
-        /// <returns>Retorna o assunto e o conteúdo HTML do e-mail de reset de senha.</returns>
-        private (string Subject, string HtmlContent) PasswordResetEmail(PasswordReset content, string fullName)
-        {
-            const string SUBJECT = "Redefinição de Senha";
-
-            var resetUrl = _configuration["Application:ResetPasswordUrl"];
-
-            var htmlContent = $@"
-                <h2 style=""margin: 0; color: #333333; font-size: 22px;"">
-                    Olá, <span style=""color: #27ae60;"">{fullName}</span>
-                </h2>
-                <p>Recebemos uma solicitação para redefinir a senha da sua conta.</p>
-                <p>Clique no link abaixo para redefinir sua senha:</p>
-                <div style=""font-size: 24px; font-weight: bold; letter-spacing: 4px; background-color: #27ae60; padding: 15px; width: fit-content; border-radius: 8px; margin: 20px auto; text-align: center; color: white;"">
-                    <a href=""{resetUrl}{content.Token}"" style=""background-color: #27ae60; padding: 10px 20px; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;"">
-                        Redefinir
-                    </a>
-                </div>
-                <p>Se você não fez essa solicitação, ignore este e-mail.</p>";
-
-            return (SUBJECT, Wrap(htmlContent));
-        }
-
-        /// <summary>
-        /// Envolve o conteúdo HTML gerado em uma estrutura completa de e-mail, incluindo cabeçalho, corpo e rodapé.
-        /// </summary>
-        /// <param name="htmlContent">Conteúdo HTML principal do e-mail.</param>
-        /// <returns>Retorna o conteúdo completo do e-mail, com formatação básica.</returns>
-        private string Wrap(string htmlContent)
-        {
-            return $@"
-                <!DOCTYPE html>
-                <html lang=""pt-br"">
-                <head>
-                    <meta charset=""UTF-8"">
-                    <meta name=""viewport"" content=""width=device-width, initial-scale=1.0"">
-                </head>
-                <body style=""margin: 0; padding: 0; font-family: 'Segoe UI';"">
-                    <div style=""margin: 40px auto; max-width: 600px; background-color: #f7f7f7; border-radius: 10px; overflow: hidden; box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);"">
-                        {Body(htmlContent)}
-                        {Footer()}
-                    </div>
-                </body>
-                </html>";
-        }
-
-        /// <summary>
-        /// Cria o corpo do e-mail, onde o conteúdo principal será exibido.
-        /// </summary>
-        /// <param name="htmlContent">Conteúdo HTML principal do e-mail.</param>
-        /// <returns>Retorna o corpo do e-mail com o conteúdo formatado.</returns>
-        private string Body(string htmlContent)
-        {
-            return $@"
-                <div style=""padding: 30px;"">
-                    <div style=""padding: 20px; border-radius: 10px;"">
-                        <div style=""margin-top: 15px; color: #333333; font-size: 16px;"">
-                            {htmlContent}
-                        </div>
-                    </div>
-                </div>";
-        }
-
-        /// <summary>
-        /// Gera o rodapé do e-mail, informando que a mensagem foi enviada automaticamente e incluindo os direitos autorais.
-        /// </summary>
-        /// <returns>Retorna o conteúdo do rodapé do e-mail.</returns>
-        private string Footer()
-        {
-            return $@"
-                <div style=""color: #888888; font-size: 13px; text-align: center; padding: 15px; background: #dbdbdb; border-top: 1px solid #e0e0e0;"">
-                    Esta mensagem foi enviada de forma automática. Por favor, não responda este e-mail.
-                </div>";
-        }
-        #endregion
     }
 }

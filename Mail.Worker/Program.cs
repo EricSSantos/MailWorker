@@ -1,12 +1,14 @@
 using Mail.Service;
+using Mail.Service.Helpers.Settings;
 using Mail.Service.Interface;
 using Mail.Worker;
-using Mail.Worker.Services;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMQ"));
+
 builder.Services.AddSingleton<IMailService, MailService>();
-builder.Services.AddSingleton<IMessageService, MessageService>();
 builder.Services.AddSingleton<IRabbitMQService, RabbitMQService>();
 
 builder.Services.AddHostedService<Worker>();

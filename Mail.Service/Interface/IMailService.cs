@@ -4,6 +4,9 @@ namespace Mail.Service.Interface
 {
     public interface IMailService
     {
-        Task SendEmail(EmailMessage emailMessage);
+        /// <summary>
+        /// Envia um e-mail com base nas informações fornecidas.
+        /// </summary>
+        Task SendEmail(Message emailMessage);
     }
 }
