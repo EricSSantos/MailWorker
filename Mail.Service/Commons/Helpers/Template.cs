@@ -12,7 +12,7 @@
                     <meta name=""viewport"" content=""width=device-width,initial-scale=1.0"">
                 </head>
                 <body style=""margin:0;padding:0;font-family:'Segoe UI'"">
-                    <div style=""margin:40px auto;max-width:600px;background-color:#f7f7f7;border-radius:10px;
+                    <div style=""margin:40px auto;max-width:500px;background-color:#f7f7f7;border-radius:10px;
                                 overflow:hidden;box-shadow:0 0 10px rgba(0,0,0,0.05);"">
                         {Body(body)}
                         {Footer()}

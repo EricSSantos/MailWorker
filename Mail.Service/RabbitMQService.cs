@@ -13,7 +13,7 @@ namespace Mail.Service
     public sealed class RabbitMQService : IRabbitMQService, IDisposable
     {
         private readonly RabbitMqSettings _settings;
-        private readonly IMailService _mailService;
+        private readonly IEmailService _mailService;
         private readonly ILogger<RabbitMQService> _logger;
         private readonly IConnection _connection;
         private readonly IModel _channel;
@@ -24,7 +24,7 @@ namespace Mail.Service
 
         public RabbitMQService(
             IOptions<RabbitMqSettings> options,
-            IMailService mailService,
+            IEmailService mailService,
             ILogger<RabbitMQService> logger)
         {
             _settings = options.Value;
@@ -89,7 +89,8 @@ namespace Mail.Service
 
             _logger.LogInformation(
                 "Filas declaradas com sucesso: {EmailQueue}, {DeadLetterQueue}",
-                _settings.EmailQueue, _settings.DeadLetterQueue);
+                _settings.EmailQueue, 
+                _settings.DeadLetterQueue);
         }
 
         public void Start(CancellationToken cancellationToken)
@@ -102,19 +103,23 @@ namespace Mail.Service
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
                 var retryCount = GetRetryCount(ea);
 
-                if (!Serializer.TryDeserializeMessage<Message>(json, out var emailMessage))
+                if (!Serializer.TryDeserializeMessage<Email>(json, out var emailMessage))
                 {
                     _logger.LogWarning("Mensagem inválida recebida. Falha ao desserializar JSON para EmailMessage.");
+                    
                     SendToDeadLetter(json, "Falha ao desserializar JSON.");
                     _channel.BasicAck(ea.DeliveryTag, false);
+                    
                     return;
                 }
 
                 try
                 {
                     _logger.LogInformation("Processando e-mail para {To}", emailMessage.To);
+                    
                     await _mailService.SendEmail(emailMessage);
                     _channel.BasicAck(ea.DeliveryTag, false);
+                    
                     _logger.LogInformation("E-mail enviado com sucesso para {To}", emailMessage.To);
                 }
                 catch (Exception ex)
@@ -153,10 +158,12 @@ namespace Mail.Service
         public void Dispose()
         {
             _logger.LogInformation("Encerrando conexão com RabbitMQ...");
+            
             _channel?.Close();
             _channel?.Dispose();
             _connection?.Close();
             _connection?.Dispose();
+            
             _logger.LogInformation("Conexão RabbitMQ encerrada.");
         }
 

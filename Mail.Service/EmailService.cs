@@ -8,15 +8,15 @@ using System.Net.Mail;
 
 namespace Mail.Service
 {
-    public sealed class MailService : IMailService
+    public sealed class EmailService : IEmailService
     {
         private readonly SmtpSettings _smtp;
-        private readonly ILogger<MailService> _logger;
+        private readonly ILogger<EmailService> _logger;
         private readonly IEnumerable<IEmailStrategy> _strategies;
 
-        public MailService(
+        public EmailService(
             IOptions<SmtpSettings> smtp,
-            ILogger<MailService> logger,
+            ILogger<EmailService> logger,
             IEnumerable<IEmailStrategy> strategies)
         {
             _smtp = smtp.Value;
@@ -24,12 +24,31 @@ namespace Mail.Service
             _strategies = strategies;
         }
 
-        public async Task SendEmail(Message emailMessage)
+        public async Task SendEmail(Email emailMessage)
         {
-            var strategy = _strategies.FirstOrDefault(s => s.Type == emailMessage.Type);
+            if (string.IsNullOrWhiteSpace(emailMessage.To))
+            {
+                _logger.LogWarning(
+                    "Mensagem ignorada: destinatário ausente. Id={Id}, Tipo={Type}",
+                    emailMessage.Id,
+                    emailMessage.Type
+                );
 
+                return;
+            }
+
+            var strategy = _strategies.FirstOrDefault(s => s.Type == emailMessage.Type);
             if (strategy is null)
-                throw new InvalidOperationException($"Nenhuma estratégia encontrada para o tipo {emailMessage.Type}.");
+            {
+                _logger.LogError(
+                    "Nenhuma estratégia encontrada para o tipo {Type}. Id={Id}",
+                    emailMessage.Type,
+                    emailMessage.Id);
+
+                throw new InvalidOperationException(
+                    $"Nenhuma estratégia configurada para o tipo {emailMessage.Type}. Id={emailMessage.Id}"
+                );
+            }
 
             var (subject, htmlContent) = strategy.Build(emailMessage);
 
@@ -55,18 +74,21 @@ namespace Mail.Service
                 await smtpClient.SendMailAsync(message);
 
                 _logger.LogInformation(
-                    "E-mail {Type} enviado com sucesso para {Email}",
+                    "E-mail enviado com sucesso. Id={Id}, Tipo={Type}, Hora={Time}",
+                    emailMessage.Id,
                     emailMessage.Type,
-                    emailMessage.To
+                    DateTime.UtcNow.ToString("O")
                 );
             }
             catch (SmtpException smtpEx)
             {
                 _logger.LogError(
                     smtpEx,
-                    "Erro SMTP ao enviar e-mail para {Email}: {Message}",
-                    emailMessage.To,
-                    smtpEx.Message
+                    "Erro SMTP ao enviar e-mail. Id={Id}, Tipo={Type}, Status={Status}, Hora={Time}",
+                    emailMessage.Id,
+                    emailMessage.Type,
+                    smtpEx.StatusCode,
+                    DateTime.UtcNow.ToString("O")
                 );
                 throw;
             }
@@ -74,8 +96,10 @@ namespace Mail.Service
             {
                 _logger.LogError(
                     ex,
-                    "Erro inesperado ao enviar e-mail para {Email}",
-                    emailMessage.To
+                    "Erro inesperado ao enviar e-mail. Id={Id}, Tipo={Type}, Hora={Time}",
+                    emailMessage.Id,
+                    emailMessage.Type,
+                    DateTime.UtcNow.ToString("O")
                 );
                 throw;
             }

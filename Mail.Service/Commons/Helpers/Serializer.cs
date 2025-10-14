@@ -38,10 +38,14 @@ namespace Mail.Service.Commons.Helpers
             }
         }
 
+        #region Private Methods
+
         private static readonly JsonSerializerOptions MessageOptions = new()
         {
             PropertyNameCaseInsensitive = true,
             WriteIndented = false
         };
+
+        #endregion
     }
 }

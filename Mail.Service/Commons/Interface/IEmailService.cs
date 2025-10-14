@@ -2,12 +2,12 @@
 
 namespace Mail.Service.Commons.Interface
 {
-    public interface IMailService
+    public interface IEmailService
     {
         /// <summary>
         /// Envia um e-mail com base nas informações fornecidas.
         /// </summary>
         /// <param name="emailMessage">Mensagem recebida da fila contendo as informações do e-mail.</param>
-        Task SendEmail(Message emailMessage);
+        Task SendEmail(Email emailMessage);
     }
 }

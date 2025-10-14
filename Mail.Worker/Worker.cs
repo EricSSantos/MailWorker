@@ -2,19 +2,23 @@ using Mail.Service.Commons.Interface;
 
 namespace Mail.Worker
 {
-    public class Worker : BackgroundService
+    public sealed class Worker : BackgroundService
     {
-        private readonly IRabbitMQService _rabbitMqService;
+        private readonly IServiceProvider _serviceProvider;
 
-        public Worker(IRabbitMQService rabbitMqService)
+        public Worker(IServiceProvider serviceProvider)
         {
-            _rabbitMqService = rabbitMqService;
+            _serviceProvider = serviceProvider;
         }
 
-        protected override Task ExecuteAsync(CancellationToken cancellationToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _rabbitMqService.Start(cancellationToken);
-            return Task.CompletedTask;
+            using var scope = _serviceProvider.CreateScope();
+            var rabbitMqService = scope.ServiceProvider.GetRequiredService<IRabbitMQService>();
+
+            rabbitMqService.Start(stoppingToken);
+
+            await Task.Delay(Timeout.Infinite, stoppingToken);
         }
     }
 }
