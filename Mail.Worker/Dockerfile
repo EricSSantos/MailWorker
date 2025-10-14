@@ -10,7 +10,6 @@ FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
 COPY ["Mail.Worker/Mail.Worker.csproj", "Mail.Worker/"]
-COPY ["Mail.Domain/Mail.Domain.csproj", "Mail.Domain/"]
 COPY ["Mail.Service/Mail.Service.csproj", "Mail.Service/"]
 RUN dotnet restore "./Mail.Worker/Mail.Worker.csproj"
 COPY . .
