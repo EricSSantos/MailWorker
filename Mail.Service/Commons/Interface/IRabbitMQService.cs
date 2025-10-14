@@ -1,4 +1,4 @@
-﻿namespace Mail.Service.Interface
+﻿namespace Mail.Service.Commons.Interface
 {
     public interface IRabbitMQService
     {

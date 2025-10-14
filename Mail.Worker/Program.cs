@@ -1,6 +1,6 @@
 using Mail.Service;
-using Mail.Service.Helpers.Settings;
-using Mail.Service.Interface;
+using Mail.Service.Commons.Interface;
+using Mail.Service.Commons.Settings;
 using Mail.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);

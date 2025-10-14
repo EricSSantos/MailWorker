@@ -1,4 +1,4 @@
-﻿namespace Mail.Service.Helpers.Settings
+﻿namespace Mail.Service.Commons.Settings
 {
     public sealed class RabbitMqSettings
     {

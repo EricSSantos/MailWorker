@@ -1,6 +1,6 @@
-﻿using Mail.Domain.Entities;
-using Mail.Service.Helpers.Settings;
-using Mail.Service.Interface;
+﻿using Mail.Service.Commons.Interface;
+using Mail.Service.Commons.Settings;
+using Mail.Service.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Net;
@@ -26,13 +26,15 @@ namespace Mail.Service
 
         public async Task SendEmail(Message emailMessage)
         {
+            var strategy = _strategies.FirstOrDefault(s => s.Type == emailMessage.Type);
+
+            if (strategy is null)
+                throw new InvalidOperationException($"Nenhuma estratégia encontrada para o tipo {emailMessage.Type}.");
+
+            var (subject, htmlContent) = strategy.Build(emailMessage);
+
             try
             {
-                var strategy = _strategies.FirstOrDefault(s => s.Type == emailMessage.Type)
-                    ?? throw new ArgumentException($"Nenhuma estratégia configurada para o tipo {emailMessage.Type}");
-
-                var (subject, htmlContent) = strategy.Build(emailMessage);
-
                 using var smtpClient = new SmtpClient(_smtp.Host)
                 {
                     Port = _smtp.Port,
@@ -40,21 +42,41 @@ namespace Mail.Service
                     EnableSsl = _smtp.EnableSsl
                 };
 
-                using var message = new MailMessage(
-                    new MailAddress(_smtp.FromEmail, _smtp.FromName),
-                    new MailAddress(emailMessage.To))
+                using var message = new MailMessage
                 {
+                    From = new MailAddress(_smtp.FromEmail, _smtp.FromName),
                     Subject = subject,
                     Body = htmlContent,
                     IsBodyHtml = true
                 };
 
+                message.To.Add(new MailAddress(emailMessage.To));
+
                 await smtpClient.SendMailAsync(message);
-                _logger.LogInformation("E-mail enviado com sucesso para {Email}", emailMessage.To);
+
+                _logger.LogInformation(
+                    "E-mail {Type} enviado com sucesso para {Email}",
+                    emailMessage.Type,
+                    emailMessage.To
+                );
+            }
+            catch (SmtpException smtpEx)
+            {
+                _logger.LogError(
+                    smtpEx,
+                    "Erro SMTP ao enviar e-mail para {Email}: {Message}",
+                    emailMessage.To,
+                    smtpEx.Message
+                );
+                throw;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Erro ao enviar e-mail para {Email}", emailMessage.To);
+                _logger.LogError(
+                    ex,
+                    "Erro inesperado ao enviar e-mail para {Email}",
+                    emailMessage.To
+                );
                 throw;
             }
         }

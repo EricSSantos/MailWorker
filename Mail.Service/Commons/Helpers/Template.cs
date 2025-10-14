@@ -1,4 +1,4 @@
-﻿namespace Mail.Service.Helpers
+﻿namespace Mail.Service.Commons.Helpers
 {
     public static class Template
     {

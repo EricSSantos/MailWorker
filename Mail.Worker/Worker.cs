@@ -1,4 +1,4 @@
-using Mail.Service.Interface;
+using Mail.Service.Commons.Interface;
 
 namespace Mail.Worker
 {

@@ -1,7 +1,7 @@
-﻿using Mail.Domain.Entities;
-using Mail.Service.Helpers;
-using Mail.Service.Helpers.Settings;
-using Mail.Service.Interface;
+﻿using Mail.Service.Commons.Helpers;
+using Mail.Service.Commons.Interface;
+using Mail.Service.Commons.Settings;
+using Mail.Service.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using RabbitMQ.Client;
@@ -15,7 +15,6 @@ namespace Mail.Service
         private readonly RabbitMqSettings _settings;
         private readonly IMailService _mailService;
         private readonly ILogger<RabbitMQService> _logger;
-
         private readonly IConnection _connection;
         private readonly IModel _channel;
 
@@ -53,7 +52,6 @@ namespace Mail.Service
                     _channel = _connection.CreateModel();
 
                     _logger.LogInformation("Conexão com RabbitMQ estabelecida com sucesso.");
-
                     DeclareQueues();
                     return;
                 }
@@ -89,7 +87,8 @@ namespace Mail.Service
                 autoDelete: false,
                 arguments: null);
 
-            _logger.LogInformation("Filas declaradas: {EmailQueue}, {DeadLetterQueue}",
+            _logger.LogInformation(
+                "Filas declaradas com sucesso: {EmailQueue}, {DeadLetterQueue}",
                 _settings.EmailQueue, _settings.DeadLetterQueue);
         }
 
@@ -98,7 +97,6 @@ namespace Mail.Service
             _logger.LogInformation("Iniciando consumo de mensagens da fila {Queue}", _settings.EmailQueue);
 
             var consumer = new AsyncEventingBasicConsumer(_channel);
-
             consumer.Received += async (_, ea) =>
             {
                 var json = Encoding.UTF8.GetString(ea.Body.ToArray());
@@ -106,7 +104,7 @@ namespace Mail.Service
 
                 if (!Serializer.TryDeserializeMessage<Message>(json, out var emailMessage))
                 {
-                    _logger.LogWarning("Mensagem inválida. Falha ao desserializar JSON para EmailMessage.");
+                    _logger.LogWarning("Mensagem inválida recebida. Falha ao desserializar JSON para EmailMessage.");
                     SendToDeadLetter(json, "Falha ao desserializar JSON.");
                     _channel.BasicAck(ea.DeliveryTag, false);
                     return;
@@ -114,11 +112,10 @@ namespace Mail.Service
 
                 try
                 {
-                    _logger.LogInformation("Processando e-mail {EmailId} para {To}", emailMessage.Id, emailMessage.To);
+                    _logger.LogInformation("Processando e-mail para {To}", emailMessage.To);
                     await _mailService.SendEmail(emailMessage);
-
                     _channel.BasicAck(ea.DeliveryTag, false);
-                    _logger.LogInformation("E-mail enviado com sucesso: {EmailId}", emailMessage.Id);
+                    _logger.LogInformation("E-mail enviado com sucesso para {To}", emailMessage.To);
                 }
                 catch (Exception ex)
                 {
@@ -127,16 +124,16 @@ namespace Mail.Service
                     if (retryCount >= MAX_RETRY)
                     {
                         _logger.LogError(ex,
-                            "Falha após {RetryCount} tentativas. Enviando para DeadLetter: {EmailId}",
-                            retryCount, emailMessage.Id);
+                            "Falha após {RetryCount} tentativas. Enviando mensagem para DeadLetter ({To})",
+                            retryCount, emailMessage.To);
 
                         SendToDeadLetter(json, $"Falha após {MAX_RETRY} tentativas: {ex.Message}");
                     }
                     else
                     {
                         _logger.LogWarning(
-                            "Falha ao processar mensagem {EmailId}. Reenviando (tentativa {RetryCount})",
-                            emailMessage.Id, retryCount);
+                            "Falha ao processar e-mail para {To}. Reenviando tentativa {RetryCount}/{Max}.",
+                            emailMessage.To, retryCount, MAX_RETRY);
 
                         RetryMessage(json, retryCount);
                     }
@@ -150,7 +147,7 @@ namespace Mail.Service
                 autoAck: false,
                 consumer: consumer);
 
-            _logger.LogInformation("Consumidor RabbitMQ iniciado com sucesso.");
+            _logger.LogInformation("RabbitMQ Consumer iniciado com sucesso e aguardando mensagens.");
         }
 
         public void Dispose()
@@ -162,8 +159,6 @@ namespace Mail.Service
             _connection?.Dispose();
             _logger.LogInformation("Conexão RabbitMQ encerrada.");
         }
-
-        #region Private Methods
 
         private int GetRetryCount(BasicDeliverEventArgs ea)
         {
@@ -209,7 +204,5 @@ namespace Mail.Service
                 basicProperties: props,
                 body: Encoding.UTF8.GetBytes(json));
         }
-
-        #endregion
     }
 }
