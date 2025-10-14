@@ -12,13 +12,6 @@
       "environmentVariables": {
         "DOTNET_ENVIRONMENT": "Production"
       }
-    },
-    "WSL": {
-      "commandName": "WSL2",
-      "environmentVariables": {
-        "DOTNET_ENVIRONMENT": "Development"
-      },
-      "distributionName": ""
     }
   },
   "$schema": "https://json.schemastore.org/launchsettings.json"
