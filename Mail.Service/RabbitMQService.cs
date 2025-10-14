@@ -89,7 +89,7 @@ namespace Mail.Service
 
             _logger.LogInformation(
                 "Filas declaradas com sucesso: {EmailQueue}, {DeadLetterQueue}",
-                _settings.EmailQueue, 
+                _settings.EmailQueue,
                 _settings.DeadLetterQueue);
         }
 
@@ -106,44 +106,47 @@ namespace Mail.Service
                 if (!Serializer.TryDeserializeMessage<Email>(json, out var emailMessage))
                 {
                     _logger.LogWarning("Mensagem inválida recebida. Falha ao desserializar JSON para EmailMessage.");
-                    
+
                     SendToDeadLetter(json, "Falha ao desserializar JSON.");
                     _channel.BasicAck(ea.DeliveryTag, false);
-                    
+
                     return;
                 }
 
-                try
+                using (_logger.BeginScope(new { EmailId = emailMessage.Id }))
                 {
-                    _logger.LogInformation("Processando e-mail para {To}", emailMessage.To);
-                    
-                    await _mailService.SendEmail(emailMessage);
-                    _channel.BasicAck(ea.DeliveryTag, false);
-                    
-                    _logger.LogInformation("E-mail enviado com sucesso para {To}", emailMessage.To);
-                }
-                catch (Exception ex)
-                {
-                    retryCount++;
-
-                    if (retryCount >= MAX_RETRY)
+                    try
                     {
-                        _logger.LogError(ex,
-                            "Falha após {RetryCount} tentativas. Enviando mensagem para DeadLetter ({To})",
-                            retryCount, emailMessage.To);
+                        _logger.LogInformation("Processando e-mail do tipo {Type}", emailMessage.Type);
 
-                        SendToDeadLetter(json, $"Falha após {MAX_RETRY} tentativas: {ex.Message}");
+                        await _mailService.SendEmail(emailMessage);
+                        _channel.BasicAck(ea.DeliveryTag, false);
+
+                        _logger.LogInformation("E-mail processado e enviado com sucesso.");
                     }
-                    else
+                    catch (Exception ex)
                     {
-                        _logger.LogWarning(
-                            "Falha ao processar e-mail para {To}. Reenviando tentativa {RetryCount}/{Max}.",
-                            emailMessage.To, retryCount, MAX_RETRY);
+                        retryCount++;
 
-                        RetryMessage(json, retryCount);
+                        if (retryCount >= MAX_RETRY)
+                        {
+                            _logger.LogError(ex,
+                                "Falha após {RetryCount} tentativas. Enviando mensagem para DeadLetter.",
+                                retryCount);
+
+                            SendToDeadLetter(json, $"Falha após {MAX_RETRY} tentativas: {ex.Message}");
+                        }
+                        else
+                        {
+                            _logger.LogWarning(
+                                "Falha ao processar e-mail. Reenviando tentativa {RetryCount}/{Max}.",
+                                retryCount, MAX_RETRY);
+
+                            RetryMessage(json, retryCount);
+                        }
+
+                        _channel.BasicAck(ea.DeliveryTag, false);
                     }
-
-                    _channel.BasicAck(ea.DeliveryTag, false);
                 }
             };
 
@@ -158,12 +161,12 @@ namespace Mail.Service
         public void Dispose()
         {
             _logger.LogInformation("Encerrando conexão com RabbitMQ...");
-            
+
             _channel?.Close();
             _channel?.Dispose();
             _connection?.Close();
             _connection?.Dispose();
-            
+
             _logger.LogInformation("Conexão RabbitMQ encerrada.");
         }
 
