@@ -3,8 +3,8 @@ services:
     image: rabbitmq:management
     container_name: rabbitmq
     ports:
-      - "5672:5672"     # Porta padrão para conexões
-      - "15672:15672"   # Porta do painel de administração
+      - 5672:5672
+      - 15672:15672
     environment:
       RABBITMQ_DEFAULT_USER: guest
       RABBITMQ_DEFAULT_PASS: guest
@@ -22,29 +22,24 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    restart: unless-stopped
-    user: root
 
   mail.worker:
     container_name: mailworker
     build:
-      context: .
+      context: ..
       dockerfile: MailWorker/Mail.Worker/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
     depends_on:
       rabbitmq:
         condition: service_healthy
     networks:
       - public_network
       - private_network
-    restart: unless-stopped
 
 volumes:
   rabbitmq_data:
-    external: false
   rabbitmq_logs:
-    external: false
 
 networks:
   public_network:
