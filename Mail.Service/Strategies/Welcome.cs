@@ -29,7 +29,7 @@ namespace Mail.Service.Strategies
                 <h2>Olá, {message.FullName.Trim()}!</h2>
                 <p>Estamos muito felizes em ter você conosco.</p>
                 <p>Agora você pode aproveitar todos os recursos da nossa plataforma {_app.Name}.</p>
-                <p>Atenciosamente,<br/>Equipe {_app.Name}</p>
+                <p>Atenciosamente, equipe {_app.Name}.</p>
             ";
 
             var html = Template.Wrap(body);
