@@ -1,5 +1,4 @@
 ﻿using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace Mail.Service.Commons.Helpers
 {
@@ -23,7 +22,7 @@ namespace Mail.Service.Commons.Helpers
         }
 
         /// <summary>
-        /// Tenta serializar um objeto para JSON.
+        /// Serializa um objeto para JSON.
         /// </summary>
         public static bool TrySerializeMessage<T>(T value, out string? json)
         {
@@ -39,15 +38,10 @@ namespace Mail.Service.Commons.Helpers
             }
         }
 
-        #region Private Methods
-
         private static readonly JsonSerializerOptions MessageOptions = new()
         {
             PropertyNameCaseInsensitive = true,
-            WriteIndented = false,
-            Converters = { new JsonStringEnumConverter() }
+            WriteIndented = false
         };
-
-        #endregion
     }
 }
