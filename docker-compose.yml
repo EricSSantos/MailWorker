@@ -6,8 +6,8 @@ services:
       - "5672:5672"
       - "15672:15672"
     environment:
-      RABBITMQ_DEFAULT_USER: guest
-      RABBITMQ_DEFAULT_PASS: guest
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ__USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ__PASSWORD}
       RABBITMQ_DEFAULT_VHOST: /
     volumes:
       - rabbitmq_data:/var/lib/rabbitmq
@@ -16,12 +16,6 @@ services:
       - ./rabbitmq/definitions.json:/etc/rabbitmq/definitions.json
     networks:
       - private_network
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
     restart: unless-stopped
     user: root
 
@@ -31,10 +25,26 @@ services:
       context: .
       dockerfile: Mail.Worker/Dockerfile
     environment:
-      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      DOTNET_RUNNING_IN_CONTAINER: "true"
+
+      SMTP__HOST: ${SMTP__HOST}
+      SMTP__PORT: ${SMTP__PORT}
+      SMTP__USER: ${SMTP__USER}
+      SMTP__PASSWORD: ${SMTP__PASSWORD}
+      SMTP__FROMEMAIL: ${SMTP__FROMEMAIL}
+      SMTP__FROMNAME: ${SMTP__FROMNAME}
+      SMTP__ENABLESSL: ${SMTP__ENABLESSL}
+
+      RABBITMQ__HOST: ${RABBITMQ__HOST}
+      RABBITMQ__PORT: ${RABBITMQ__PORT}
+      RABBITMQ__USER: ${RABBITMQ__USER}
+      RABBITMQ__PASSWORD: ${RABBITMQ__PASSWORD}
+      RABBITMQ__EMAILQUEUE: ${RABBITMQ__EMAILQUEUE}
+      RABBITMQ__DEADLETTERQUEUE: ${RABBITMQ__DEADLETTERQUEUE}
+
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      - rabbitmq
     networks:
       - public_network
       - private_network
