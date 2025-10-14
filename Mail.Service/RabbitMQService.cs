@@ -41,9 +41,40 @@ namespace Mail.Service
                 DispatchConsumersAsync = true
             };
 
-            _connection = factory.CreateConnection();
-            _channel = _connection.CreateModel();
+            for (int attempt = 1; attempt <= MAX_RETRY; attempt++)
+            {
+                try
+                {
+                    _logger.LogInformation(
+                        "Tentando conectar ao RabbitMQ (tentativa {Attempt}/{Max}) em {Host}:{Port}...",
+                        attempt, MAX_RETRY, _settings.Host, _settings.Port);
 
+                    _connection = factory.CreateConnection();
+                    _channel = _connection.CreateModel();
+
+                    _logger.LogInformation("Conexão com RabbitMQ estabelecida com sucesso.");
+
+                    DeclareQueues();
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex,
+                        "Falha ao conectar ao RabbitMQ (tentativa {Attempt}/{Max}) em {Host}:{Port}",
+                        attempt, MAX_RETRY, _settings.Host, _settings.Port);
+
+                    if (attempt == MAX_RETRY)
+                        throw;
+
+                    var delay = TimeSpan.FromSeconds(Math.Pow(2, attempt));
+                    _logger.LogWarning("Aguardando {Delay}s antes da próxima tentativa...", delay.TotalSeconds);
+                    Thread.Sleep(delay);
+                }
+            }
+        }
+
+        private void DeclareQueues()
+        {
             _channel.QueueDeclare(
                 queue: _settings.EmailQueue,
                 durable: true,
@@ -57,10 +88,15 @@ namespace Mail.Service
                 exclusive: false,
                 autoDelete: false,
                 arguments: null);
+
+            _logger.LogInformation("Filas declaradas: {EmailQueue}, {DeadLetterQueue}",
+                _settings.EmailQueue, _settings.DeadLetterQueue);
         }
 
         public void Start(CancellationToken cancellationToken)
         {
+            _logger.LogInformation("Iniciando consumo de mensagens da fila {Queue}", _settings.EmailQueue);
+
             var consumer = new AsyncEventingBasicConsumer(_channel);
 
             consumer.Received += async (_, ea) =>
@@ -79,7 +115,6 @@ namespace Mail.Service
                 try
                 {
                     _logger.LogInformation("Processando e-mail {EmailId} para {To}", emailMessage.Id, emailMessage.To);
-
                     await _mailService.SendEmail(emailMessage);
 
                     _channel.BasicAck(ea.DeliveryTag, false);
@@ -91,12 +126,18 @@ namespace Mail.Service
 
                     if (retryCount >= MAX_RETRY)
                     {
-                        _logger.LogError(ex, "Falha após {RetryCount} tentativas. Enviando para dead-letter: {EmailId}", retryCount, emailMessage.Id);
+                        _logger.LogError(ex,
+                            "Falha após {RetryCount} tentativas. Enviando para DeadLetter: {EmailId}",
+                            retryCount, emailMessage.Id);
+
                         SendToDeadLetter(json, $"Falha após {MAX_RETRY} tentativas: {ex.Message}");
                     }
                     else
                     {
-                        _logger.LogWarning("Falha ao processar mensagem {EmailId}. Reenviando (tentativa {RetryCount})", emailMessage.Id, retryCount);
+                        _logger.LogWarning(
+                            "Falha ao processar mensagem {EmailId}. Reenviando (tentativa {RetryCount})",
+                            emailMessage.Id, retryCount);
+
                         RetryMessage(json, retryCount);
                     }
 
@@ -108,14 +149,18 @@ namespace Mail.Service
                 queue: _settings.EmailQueue,
                 autoAck: false,
                 consumer: consumer);
+
+            _logger.LogInformation("Consumidor RabbitMQ iniciado com sucesso.");
         }
 
         public void Dispose()
         {
+            _logger.LogInformation("Encerrando conexão com RabbitMQ...");
             _channel?.Close();
             _channel?.Dispose();
             _connection?.Close();
             _connection?.Dispose();
+            _logger.LogInformation("Conexão RabbitMQ encerrada.");
         }
 
         #region Private Methods
