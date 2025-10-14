@@ -5,6 +5,9 @@ using Mail.Worker;
 
 var builder = Host.CreateApplicationBuilder(args);
 
+//Inclui variáveis de ambiente (Dokploy, Docker,etc)
+builder.Configuration.AddEnvironmentVariables();
+
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMQ"));
 
