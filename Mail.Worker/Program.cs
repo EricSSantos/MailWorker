@@ -21,6 +21,7 @@ builder.Services.AddScoped<IRabbitMQService, RabbitMQService>();
 
 // Strategies
 builder.Services.AddScoped<IEmailStrategy, Welcome>();
+builder.Services.AddScoped<IEmailStrategy, ForgotPassword>();
 
 builder.Services.AddHostedService<Worker>();
 

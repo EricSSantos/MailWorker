@@ -1,4 +1,5 @@
 ﻿using Mail.Service.Enums;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace Mail.Service.Models
@@ -17,10 +18,10 @@ namespace Mail.Service.Models
         [JsonPropertyName("type")]
         public EmailType Type { get; init; }
 
-        [JsonPropertyName("content")]
-        public string Content { get; init; } = string.Empty;
+        [JsonPropertyName("payload")]
+        public JsonElement? Payload { get; init; }
 
         [JsonPropertyName("created_at")]
-        public DateTimeOffset CreatedAt { get; init; } = DateTimeOffset.UtcNow;
+        public DateTimeOffset CreatedAt { get; init; }
     }
 }
