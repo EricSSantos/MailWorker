@@ -16,7 +16,34 @@ O **MailWorker** é responsável por processar mensagens da fila RabbitMQ e envi
 
 ---
 
-## 🔧 Configuração (`appsettings.json`)
+## 📈 Como funciona
+
+1. Um serviço externo publica uma mensagem JSON na fila `email_queue`.  
+2. O MailWorker consome a mensagem e identifica o tipo de e-mail com base no campo type, utilizando um enum compartilhado entre os serviços para garantir consistência entre quem envia e quem processa.
+3. O serviço seleciona a **estratégia de template** correspondente.  
+4. O conteúdo é processado e enviado pelo **provedor SMTP**.  
+5. Se falhar:
+   - Tenta reenviar até **3 vezes**;
+   - Depois, envia para a **Dead Letter Queue**.
+
+---
+
+## 💌 Estrutura das mensagens
+
+### Exemplo: `Welcome`
+```json
+{
+  "id": "6f02a1b2-9c1f-4f9c-a2f2-d6e5d54b2c67",
+  "type": 0,
+  "to": "usuario@dominio.com.br",
+  "fullName": "Usuário Exemplo",
+  "payload": {}
+}
+```
+
+---
+
+## 🔧 Configuração Locais (`appsettings.json`)
 
 Edite o arquivo com suas credenciais de SMTP e RabbitMQ:
 
@@ -92,47 +119,3 @@ O **Docker Compose** criará:
 - Container do **RabbitMQ** (com painel em `http://localhost:15672`)
 - Container do **MailWorker**
 - Volumes persistentes para dados das filas
-
----
-
-## 📈 Como funciona
-
-1. Um serviço externo publica uma mensagem JSON na fila `email_queue`.  
-2. O MailWorker consome a mensagem e identifica o tipo de e-mail com base no campo type, utilizando um enum compartilhado entre os serviços para garantir consistência entre quem envia e quem processa.
-3. O serviço seleciona a **estratégia de template** correspondente.  
-4. O conteúdo é processado e enviado pelo **provedor SMTP**.  
-5. Se falhar:
-   - Tenta reenviar até **3 vezes**;
-   - Depois, envia para a **Dead Letter Queue**.
-
----
-
-## 💌 Estrutura das mensagens
-
-### Exemplo: `Welcome`
-```json
-{
-  "id": "6f02a1b2-9c1f-4f9c-a2f2-d6e5d54b2c67",
-  "type": 0,
-  "to": "usuario@dominio.com.br",
-  "fullName": "Usuário Exemplo",
-  "content": {}
-}
-```
-
----
-
-## 🧱 Estrutura do projeto
-
-```
-MailWorker/
-├── Mail.Service/
-│   ├── Models/
-│   ├── Strategies/
-│   ├── Commons/
-│   ├── Enums/
-│   └── Services/
-├── MailWorker.csproj
-├── appsettings.json
-└── docker-compose.yml
-```
