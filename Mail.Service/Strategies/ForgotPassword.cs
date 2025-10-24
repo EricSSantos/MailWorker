@@ -23,8 +23,10 @@ namespace Mail.Service.Strategies
                 ? JsonSerializer.Deserialize<ForgotPasswordPayload>(message.Payload.Value)
                 : null;
 
-            if (payload is null || string.IsNullOrWhiteSpace(payload.Code))
+            if (payload is null)
                 throw new InvalidOperationException("Payload inválido para e-mail de recuperação de senha.");
+            if (payload.Code.ToString().Length < 6 || payload.Code.ToString().Length > 6)
+                throw new InvalidOperationException("Código de recuperação de senha inválido no payload.");
 
             var subject = "Recuperação de senha";
 
@@ -37,7 +39,7 @@ namespace Mail.Service.Strategies
                     <strong style=""font-size: 24px;"">{payload.Code}</strong>
                 </div>
             
-                <p>Se você não solicitou esta ação, apenas ignore este e-mail.</p>
+                <p>Se você não solicitou esta ação, ignore este e-mail.</p>
             ";
 
             var html = Template.Wrap(body);

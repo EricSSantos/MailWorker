@@ -6,6 +6,5 @@
     /// mas mantém a estrutura para futuras extensões.
     /// </summary>
     public sealed class WelcomePayload
-    {
-    }
+    { }
 }
