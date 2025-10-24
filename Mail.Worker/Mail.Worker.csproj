@@ -15,7 +15,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\Mail.Domain\Mail.Domain.csproj" />
     <ProjectReference Include="..\Mail.Service\Mail.Service.csproj" />
   </ItemGroup>
 </Project>
