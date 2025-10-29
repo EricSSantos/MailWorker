@@ -1,9 +1,8 @@
 ﻿namespace Mail.Service.Models.Payloads
 {
     /// <summary>
-    /// Payload específico para e-mails de boas-vindas.
-    /// Atualmente não carrega dados adicionais,
-    /// mas mantém a estrutura para futuras extensões.
+    /// Representa o payload do e-mail de boas-vindas.
+    /// Mantém a estrutura para futuras extensões.
     /// </summary>
     public sealed class WelcomePayload
     { }

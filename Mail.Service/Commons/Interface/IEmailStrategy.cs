@@ -3,21 +3,21 @@ using Mail.Service.Models;
 
 namespace Mail.Service.Commons.Interface
 {
+    /// <summary>
+    /// Define o contrato para construção de e-mails transacionais.
+    /// </summary>
     public interface IEmailStrategy
     {
         /// <summary>
-        /// Tipo de e-mail que a estratégia representa.
-        /// Utilizado para identificar automaticamente
-        /// qual implementação deve ser aplicada.
+        /// Obtém o tipo de e-mail suportado pela estratégia.
         /// </summary>
         EmailType Type { get; }
 
         /// <summary>
-        /// Constrói o assunto e o corpo HTML do e-mail
-        /// com base nas informações fornecidas na mensagem.
+        /// Gera o assunto e o conteúdo HTML do e-mail.
         /// </summary>
-        /// <param name="message">Mensagem contendo os dados do destinatário e conteúdo dinâmico.</param>
-        /// <returns>Uma tupla contendo o assunto e o conteúdo HTML do e-mail.</returns>
+        /// <param name="message">Mensagem contendo os dados do e-mail.</param>
+        /// <returns>Assunto e corpo formatado do e-mail.</returns>
         (string Subject, string HtmlContent) Build(Email message);
     }
 }

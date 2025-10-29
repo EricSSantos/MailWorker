@@ -1,7 +1,15 @@
 ﻿namespace Mail.Service.Commons.Helpers
 {
-    public static class Template
+    /// <summary>
+    /// Fornece métodos auxiliares para criação de templates HTML de e-mail.
+    /// </summary>
+    public static class TemplateHelper
     {
+        /// <summary>
+        /// Envolve o conteúdo do e-mail com a estrutura HTML padrão.
+        /// </summary>
+        /// <param name="body">Conteúdo principal do e-mail.</param>
+        /// <returns>HTML completo com corpo e rodapé formatados.</returns>
         public static string Wrap(string body)
         {
             return $@"
@@ -21,6 +29,11 @@
                 </html>";
         }
 
+        /// <summary>
+        /// Gera a seção principal do corpo do e-mail.
+        /// </summary>
+        /// <param name="html">Conteúdo HTML a ser inserido no corpo.</param>
+        /// <returns>HTML formatado da seção principal.</returns>
         private static string Body(string html)
         {
             return $@"
@@ -33,6 +46,10 @@
                 </div>";
         }
 
+        /// <summary>
+        /// Gera o rodapé padrão do e-mail.
+        /// </summary>
+        /// <returns>HTML do rodapé do e-mail.</returns>
         private static string Footer()
         {
             return @"

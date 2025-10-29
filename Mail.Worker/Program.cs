@@ -20,6 +20,7 @@ builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IRabbitMQService, RabbitMQService>();
 
 // Strategies
+builder.Services.AddScoped<IEmailStrategy, ConfirmEmail>();
 builder.Services.AddScoped<IEmailStrategy, Welcome>();
 builder.Services.AddScoped<IEmailStrategy, ForgotPassword>();
 

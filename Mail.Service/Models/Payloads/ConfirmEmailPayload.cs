@@ -1,9 +1,9 @@
 ﻿namespace Mail.Service.Models.Payloads
 {
     /// <summary>
-    /// Representa o payload do e-mail de recuperação de senha.
+    /// Representa o payload do e-mail de confirmação de conta.
     /// </summary>
-    public sealed class ForgotPasswordPayload
+    public sealed class ConfirmEmailPayload
     {
         /// <summary>
         /// Código de verificação enviado ao usuário.
