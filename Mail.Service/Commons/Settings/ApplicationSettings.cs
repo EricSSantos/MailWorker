@@ -1,7 +1,7 @@
 ﻿namespace Mail.Service.Commons.Settings
 {
     /// <summary>
-    /// Define as configurações principais da aplicação.
+    /// Define as configurações gerais da aplicação.
     /// </summary>
     public sealed class ApplicationSettings
     {

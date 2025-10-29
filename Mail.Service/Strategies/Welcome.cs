@@ -13,14 +13,12 @@ namespace Mail.Service.Strategies
     public sealed class Welcome : IEmailStrategy
     {
         private readonly ApplicationSettings _app;
+        private readonly TemplateHelper _template;
 
-        /// <summary>
-        /// Inicializa a estratégia com as configurações da aplicação.
-        /// </summary>
-        /// <param name="options">Configurações da aplicação.</param>
-        public Welcome(IOptions<ApplicationSettings> options)
+        public Welcome(IOptions<ApplicationSettings> options, TemplateHelper template)
         {
             _app = options.Value;
+            _template = template;
         }
 
         /// <summary>
@@ -38,16 +36,22 @@ namespace Mail.Service.Strategies
         /// <returns>Assunto e corpo formatado do e-mail.</returns>
         public (string Subject, string HtmlContent) Build(Email message)
         {
-            var subject = $"Bem-vindo ao {_app.Name}!";
+            var subject = $"Boas-vindas ao {_app.Name}!";
 
             var body = $@"
                 <h2>Olá, {message.FullName}!</h2>
-                <p>Estamos muito felizes em ter você conosco.</p>
-                <p>Agora você pode aproveitar todos os recursos da nossa plataforma {_app.Name}.</p>
-                <p>Atenciosamente, equipe {_app.Name}.</p>
+                <p>Boas-vindas ao <strong>{_app.Name}</strong>!</p>
+                <p>Agora você faz parte da nossa comunidade e pode aproveitar todos os recursos disponíveis.</p>
+
+                <div style=""text-align:center;margin:30px 0;"">
+                    <div style=""display:inline-block;background:#7C3AED;color:#fff;
+                                padding:12px 24px;border-radius:6px;font-size:15px;font-weight:600;"">
+                        Sua jornada começa agora 🚀
+                    </div>
+                </div>
             ";
 
-            var html = TemplateHelper.Wrap(body);
+            var html = _template.Wrap(body);
             return (subject, html);
         }
     }

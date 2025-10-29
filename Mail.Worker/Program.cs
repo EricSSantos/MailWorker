@@ -1,4 +1,5 @@
 using Mail.Service;
+using Mail.Service.Commons.Helpers;
 using Mail.Service.Commons.Interface;
 using Mail.Service.Commons.Settings;
 using Mail.Service.Strategies;
@@ -11,15 +12,19 @@ builder.Configuration
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
+// Settings
 builder.Services.Configure<ApplicationSettings>(builder.Configuration.GetSection("Application"));
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.Configure<RabbitMqSettings>(builder.Configuration.GetSection("RabbitMQ"));
 
-// Services
+// Helpers
+builder.Services.AddSingleton<TemplateHelper>();
+
+// Core Services
 builder.Services.AddScoped<IEmailService, EmailService>();
 builder.Services.AddScoped<IRabbitMQService, RabbitMQService>();
 
-// Strategies
+// Email Strategies
 builder.Services.AddScoped<IEmailStrategy, ConfirmEmail>();
 builder.Services.AddScoped<IEmailStrategy, Welcome>();
 builder.Services.AddScoped<IEmailStrategy, ForgotPassword>();
